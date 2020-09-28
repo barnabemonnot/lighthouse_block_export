@@ -20,6 +20,7 @@ def extract_block(sbb: spec.SignedBeaconBlock):
 
 ATTESTATION_COLS = [
     'slot',
+    'att_slot',
     'beacon_block_root',
     'attesting_indices',
     'source_epoch',
@@ -36,6 +37,7 @@ def bitlist_to_str(bitlist: spec.Bitlist):
 def extract_attestations(sbb: spec.SignedBeaconBlock):
     return [(
         sbb.message.slot,
+        a.data.slot,
         a.data.beacon_block_root,
         bitlist_to_str(a.aggregation_bits),
         a.data.source.epoch,
@@ -155,7 +157,8 @@ def export_blocks(lighthouse_dir, out_dir, start_slot=0, end_slot=math.inf, step
                 exits = []
 
         # One last write for the last batch
-        write_data(out_dir, count, step_size, blocks, attestations, deposits, exits)
+        if len(blocks) > 0:
+            write_data(out_dir, count, step_size, blocks, attestations, deposits, exits)
         return blocks
 
     finally:
