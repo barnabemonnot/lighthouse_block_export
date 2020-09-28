@@ -6,9 +6,11 @@ python3.8 or later
 
 ## Install
 
+**leveldb** must be installed, on Mac OS, run `brew install leveldb`.
+
 ```
-$ python setup.py install
-$ pip install -r requirements.txt
+pipenv install
+pipenv shell
 ```
 
 ## Usage
@@ -22,13 +24,13 @@ $ lighthouse bn --testnet medalla
 When you've built up enough block history to analyze, stop that process and run the following:
 
 ```
-$ python export.py --datadir $LIGHTHOUSE_DATA_DIR --outdir $OUTPUT_DIR
+$ python3 export.py --datadir $LIGHTHOUSE_DATA_DIR --outdir $OUTPUT_DIR
 ```
 
-Note that the default location for $LIGHTHOUSE_DATA_DIR is $HOME/.lighthouse
+Note that the default location for `$LIGHTHOUSE_DATA_DIR` is `$HOME/.lighthouse`.
 
 ### Other options
 
-`-s --stepsize`: How many blocks each data file covers
-`-st --startslot`: Start slot (inclusive)
-`-en --endslot`: End slot (exclusive)
+- `-s --stepsize`: How many blocks each data file covers.
+- `-st --startslot`: Start slot (inclusive).
+- `-en --endslot`: End slot (exclusive).
