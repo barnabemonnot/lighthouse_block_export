@@ -9,13 +9,16 @@ import plyvel
 import eth2spec.phase0.spec as spec
 
 # See https://github.com/sigp/lighthouse/blob/ce10db15da0db4cbe76b96b58ccd1b40e39ed124/beacon_node/store/src/lib.rs#L195-L215
+
+def print_time():
+    print(datetime.datetime.now())
+
 BLOCK_PREFIX = b"blk"
 
-BLOCK_COLS = ['state_root', 'slot', 'proposer_index']
+BLOCK_COLS = ['block_root', 'state_root', 'slot', 'proposer_index']
 
-
-def extract_block(sbb: spec.SignedBeaconBlock):
-    return (sbb.message.state_root, sbb.message.slot, sbb.message.proposer_index)
+def extract_block(sbb: spec.SignedBeaconBlock, block_root: spec.Root):
+    return ("0x" + block_root.hex(), sbb.message.state_root, sbb.message.slot, sbb.message.proposer_index)
 
 
 ATTESTATION_COLS = [
@@ -76,90 +79,131 @@ def extract_exits(sbb: spec.SignedBeaconBlock):
         e.message.validator_index
     ) for e in sbb.message.body.voluntary_exits.readonly_iter()]
 
+STATE_PREFIX = b"ste"
 
-def print_time():
-    print(datetime.datetime.now())
+STATE_COLS = [
+    'state_root',
+    'slot'
+]
 
-def write_data(out_dir, count, step_size, blocks, attestations, deposits, exits):
+def extract_state(bs: spec.BeaconState, state_root: spec.Root):
+    return ("0x" + state_root.hex(), bs.slot)
+
+def parse_state_data(state_key, state_bytes, items, start_slot=0, end_slot=math.inf):
+
+    if items is None:
+        items = {
+            "states": [],
+        }
+
+    beacon_state = spec.BeaconState.decode_bytes(state_bytes)
+
+    state_slot = beacon_state.slot
+
+    if state_slot < start_slot or state_slot >= end_slot:
+        return (items, state_slot)
+
+    items["states"].append(extract_state(beacon_state, state_key))
+
+    return (items, state_slot)
+
+def write_state_data(out_dir, count, step_size, items):
+    state_file = f"{out_dir}/states_{count // step_size}.csv"
+    with open(state_file, 'w') as f:
+        writer = csv.writer(f)
+        writer.writerow(STATE_COLS)
+        for state in items["states"]:
+            writer.writerow(state)
+
+def parse_block_data(block_key, block_bytes, items, start_slot=0, end_slot=math.inf):
+
+    if items is None:
+        items = {
+            "blocks": [],
+            "attestations": [],
+            "deposits": [],
+            "exits": [],
+        }
+
+    signed_beacon_block = spec.SignedBeaconBlock.decode_bytes(block_bytes)
+
+    block_slot = signed_beacon_block.message.slot
+
+    if block_slot < start_slot or block_slot >= end_slot:
+        return (items, block_slot)
+
+    items["blocks"].append(extract_block(signed_beacon_block, block_key))
+    items["attestations"].extend(extract_attestations(signed_beacon_block))
+    items["deposits"].extend(extract_deposits(signed_beacon_block))
+    items["exits"].extend(extract_exits(signed_beacon_block))
+
+    return (items, block_slot)
+
+def write_block_data(out_dir, count, step_size, items):
     block_file = f"{out_dir}/blocks_{count // step_size}.csv"
     with open(block_file, 'w') as f:
         writer = csv.writer(f)
         writer.writerow(BLOCK_COLS)
-        for block in blocks:
+        for block in items["blocks"]:
             writer.writerow(block)
 
     attestation_file = f"{out_dir}/attestations_{count // step_size}.csv"
     with open(attestation_file, 'w') as f:
         writer = csv.writer(f)
         writer.writerow(ATTESTATION_COLS)
-        for attestation in attestations:
+        for attestation in items["attestations"]:
             writer.writerow(attestation)
 
     deposit_file = f"{out_dir}/deposits_{count // step_size}.csv"
     with open(deposit_file, 'w') as f:
         writer = csv.writer(f)
         writer.writerow(DEPOSIT_COLS)
-        for deposit in deposits:
+        for deposit in items["deposits"]:
             writer.writerow(deposit)
 
     exit_file = f"{out_dir}/exits_{count // step_size}.csv"
     with open(exit_file, 'w') as f:
         writer = csv.writer(f)
         writer.writerow(EXIT_COLS)
-        for exit in exits:
+        for exit in items["exits"]:
             writer.writerow(exit)
 
-def export_blocks(lighthouse_dir, out_dir, start_slot=0, end_slot=math.inf, step_size=1000):
+def export_data(lighthouse_dir, out_dir, item_prefix, parse_fun, write_fun, start_slot=0, end_slot=math.inf, step_size=1000):
     # start_slot is inclusive, end_slot is exclusive
     db_dir = f"{lighthouse_dir}/beacon/chain_db"
     db = plyvel.DB(db_dir)
-    blocks_db = db.prefixed_db(BLOCK_PREFIX)
+    sub_db = db.prefixed_db(item_prefix)
 
-    blocks = []
-    attestations = []
-    deposits = []
-    exits = []
     highest_slot = 1
+    items = None
 
     try:
         count = 0
         db_count = 0
-        for key, value in blocks_db:
+        for key, value in sub_db:
             db_count += 1
-            signed_beacon_block = spec.SignedBeaconBlock.decode_bytes(value)
 
-            block_slot = signed_beacon_block.message.slot
-            if block_slot > highest_slot:
-                highest_slot = block_slot
+            items, item_slot = parse_fun(key, value, items)
+
+            if item_slot > highest_slot:
+                highest_slot = item_slot
 
             if db_count % step_size == 0:
-                print(f"{datetime.datetime.now()}: seen {db_count} blocks out of approx. {highest_slot}")
-
-            if block_slot < start_slot or block_slot >= end_slot:
-                continue
+                print(f"{datetime.datetime.now()}: seen {db_count} items out of approx. {highest_slot}")
 
             count += 1
 
-            blocks.append(extract_block(signed_beacon_block))
-            attestations.extend(extract_attestations(signed_beacon_block))
-            deposits.extend(extract_deposits(signed_beacon_block))
-            exits.extend(extract_exits(signed_beacon_block))
-
             if count % step_size == 0:
                 print_time()
-                print(f'{count} blocks processed')
+                print(f'{count} items processed')
 
-                write_data(out_dir, count, step_size, blocks, attestations, deposits, exits)
+                write_fun(out_dir, count, step_size, items)
 
-                blocks = []
-                attestations = []
-                deposits = []
-                exits = []
+                items = None
 
         # One last write for the last batch
-        if len(blocks) > 0:
-            write_data(out_dir, count, step_size, blocks, attestations, deposits, exits)
-        return blocks
+        if items is not None and any([len(vs) > 0 for vs in items.values()]):
+            write_fun(out_dir, count, step_size, items)
 
     finally:
         db.close()
@@ -199,4 +243,5 @@ if __name__ == "__main__":
         else:
             step_size = 1000
 
-        export_blocks(lighthouse_dir, out_dir, start_slot=start_slot, end_slot=end_slot, step_size=step_size)
+        # export_data(lighthouse_dir, out_dir, BLOCK_PREFIX, parse_block_data, write_block_data, start_slot=start_slot, end_slot=end_slot, step_size=step_size)
+        export_data(lighthouse_dir, out_dir, STATE_PREFIX, parse_state_data, write_state_data, start_slot=start_slot, end_slot=end_slot, step_size=step_size)
