@@ -8,6 +8,7 @@ verify_ssl = true
 [packages]
 eth2spec = "*"
 plyvel = "*"
+remerkleable ="*"
 
 [requires]
 python_version = "3.8"
