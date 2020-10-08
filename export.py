@@ -15,15 +15,16 @@ def print_time():
 
 BLOCK_PREFIX = b"blk"
 
-BLOCK_COLS = ['block_root', 'state_root', 'slot', 'proposer_index']
+BLOCK_COLS = ['block_root', 'parent_root', 'state_root', 'slot', 'proposer_index']
 
 def extract_block(sbb: spec.SignedBeaconBlock, block_root: spec.Root):
-    return ("0x" + block_root.hex(), sbb.message.state_root, sbb.message.slot, sbb.message.proposer_index)
+    return ("0x" + block_root.hex(), sbb.message.parent_root, sbb.message.state_root, sbb.message.slot, sbb.message.proposer_index)
 
 
 ATTESTATION_COLS = [
     'slot',
     'att_slot',
+    'committee_index',
     'beacon_block_root',
     'attesting_indices',
     'source_epoch',
@@ -41,6 +42,7 @@ def extract_attestations(sbb: spec.SignedBeaconBlock):
     return [(
         sbb.message.slot,
         a.data.slot,
+        a.data.index,
         a.data.beacon_block_root,
         bitlist_to_str(a.aggregation_bits),
         a.data.source.epoch,
@@ -95,17 +97,21 @@ def parse_state_data(state_key, state_bytes, items, start_slot=0, end_slot=math.
         items = {
             "states": [],
         }
+    try:
+        beacon_state = spec.BeaconState.decode_bytes(state_bytes)
 
-    beacon_state = spec.BeaconState.decode_bytes(state_bytes)
+        state_slot = beacon_state.slot
 
-    state_slot = beacon_state.slot
+        if state_slot < start_slot or state_slot >= end_slot:
+            return (items, state_slot)
 
-    if state_slot < start_slot or state_slot >= end_slot:
+        items["states"].append(extract_state(beacon_state, state_key))
+
         return (items, state_slot)
 
-    items["states"].append(extract_state(beacon_state, state_key))
-
-    return (items, state_slot)
+    except:
+        print("error on deserialise")
+        return (items, 0)
 
 def write_state_data(out_dir, count, step_size, items):
     state_file = f"{out_dir}/states_{count // step_size}.csv"
@@ -243,5 +249,5 @@ if __name__ == "__main__":
         else:
             step_size = 1000
 
-        # export_data(lighthouse_dir, out_dir, BLOCK_PREFIX, parse_block_data, write_block_data, start_slot=start_slot, end_slot=end_slot, step_size=step_size)
-        export_data(lighthouse_dir, out_dir, STATE_PREFIX, parse_state_data, write_state_data, start_slot=start_slot, end_slot=end_slot, step_size=step_size)
+        export_data(lighthouse_dir, out_dir, BLOCK_PREFIX, parse_block_data, write_block_data, start_slot=start_slot, end_slot=end_slot, step_size=step_size)
+        # export_data(lighthouse_dir, out_dir, STATE_PREFIX, parse_state_data, write_state_data, start_slot=start_slot, end_slot=end_slot, step_size=step_size)
