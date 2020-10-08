@@ -107,22 +107,18 @@ def parse_state_data(state_key, state_bytes, items, start_slot=0, end_slot=math.
         items = {
             "states": [],
         }
-    try:
-        beacon_state = spec.BeaconState.decode_bytes(state_bytes)
 
     storage_cont = StateStorageContainer.decode_bytes(state_bytes)
     beacon_state = storage_cont.state
 
-        if state_slot < start_slot or state_slot >= end_slot:
-            return (items, state_slot)
+    state_slot = beacon_state.slot
 
-        items["states"].append(extract_state(beacon_state, state_key))
-
+    if state_slot < start_slot or state_slot >= end_slot:
         return (items, state_slot)
 
-    except:
-        print("error on deserialise")
-        return (items, 0)
+    items["states"].append(extract_state(beacon_state, state_key))
+
+    return (items, state_slot)
 
 def write_state_data(out_dir, count, step_size, items):
     state_file = f"{out_dir}/states_{count // step_size}.csv"
@@ -261,4 +257,4 @@ if __name__ == "__main__":
             step_size = 1000
 
         export_data(lighthouse_dir, out_dir, BLOCK_PREFIX, parse_block_data, write_block_data, start_slot=start_slot, end_slot=end_slot, step_size=step_size)
-        # export_data(lighthouse_dir, out_dir, STATE_PREFIX, parse_state_data, write_state_data, start_slot=start_slot, end_slot=end_slot, step_size=step_size)
+        export_data(lighthouse_dir, out_dir, STATE_PREFIX, parse_state_data, write_state_data, start_slot=start_slot, end_slot=end_slot, step_size=step_size)
