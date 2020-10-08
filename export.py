@@ -89,6 +89,16 @@ STATE_COLS = [
 def extract_state(bs: spec.BeaconState, state_root: spec.Root):
     return ("0x" + state_root.hex(), bs.slot)
 
+
+from remerkleable.byte_arrays import ByteList
+
+
+class StateStorageContainer(spec.Container):
+    state: spec.BeaconState
+    committee_cache: ByteList[10_000_000]  # Don't parse the committee cache bytes,
+    # just keep it as data blob. It uses the SSZ Union type and is very non-standard.
+
+
 def parse_state_data(state_key, state_bytes, items, start_slot=0, end_slot=math.inf):
 
     if items is None:
@@ -96,7 +106,8 @@ def parse_state_data(state_key, state_bytes, items, start_slot=0, end_slot=math.
             "states": [],
         }
 
-    beacon_state = spec.BeaconState.decode_bytes(state_bytes)
+    storage_cont = StateStorageContainer.decode_bytes(state_bytes)
+    beacon_state = storage_cont.state
 
     state_slot = beacon_state.slot
 
