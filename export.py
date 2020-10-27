@@ -15,10 +15,11 @@ def print_time():
 
 BLOCK_PREFIX = b"blk"
 
-BLOCK_COLS = ['block_root', 'parent_root', 'state_root', 'slot', 'proposer_index']
+BLOCK_COLS = ['block_root', 'parent_root', 'state_root', 'slot', 'proposer_index', 'graffiti']
 
 def extract_block(sbb: spec.SignedBeaconBlock, block_root: spec.Root):
-    return ("0x" + block_root.hex(), sbb.message.parent_root, sbb.message.state_root, sbb.message.slot, sbb.message.proposer_index)
+    if sbb.message.slot == 150495: print("hey!")
+    return ("0x" + block_root.hex(), sbb.message.parent_root, sbb.message.state_root, sbb.message.slot, sbb.message.proposer_index, sbb.message.body.graffiti.decode(errors='ignore').lower())
 
 
 ATTESTATION_COLS = [
@@ -227,9 +228,11 @@ if __name__ == "__main__":
 
     parser.add_argument("-d", "--datadir", help="Lighthouse data directory")
     parser.add_argument("-o", "--outdir", help="Output directory")
-    parser.add_argument("-s", "--stepsize", help="Step size")
+    parser.add_argument("-sp", "--stepsize", help="Step size")
     parser.add_argument("-st", "--startslot", help="Start slot")
     parser.add_argument("-en", "--endslot", help="End slot")
+    parser.add_argument("-b", "--blocks", help="Export blocks", action='store_true')
+    parser.add_argument("-s", "--states", help="Export states", action='store_true')
 
     args = parser.parse_args()
     print(args)
@@ -256,5 +259,7 @@ if __name__ == "__main__":
         else:
             step_size = 1000
 
-        export_data(lighthouse_dir, out_dir, BLOCK_PREFIX, parse_block_data, write_block_data, start_slot=start_slot, end_slot=end_slot, step_size=step_size)
-        export_data(lighthouse_dir, out_dir, STATE_PREFIX, parse_state_data, write_state_data, start_slot=start_slot, end_slot=end_slot, step_size=step_size)
+        if args.blocks:
+            export_data(lighthouse_dir, out_dir, BLOCK_PREFIX, parse_block_data, write_block_data, start_slot=start_slot, end_slot=end_slot, step_size=step_size)
+        if args.states:
+            export_data(lighthouse_dir, out_dir, STATE_PREFIX, parse_state_data, write_state_data, start_slot=start_slot, end_slot=end_slot, step_size=step_size)
